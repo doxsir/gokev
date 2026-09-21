@@ -46,6 +46,31 @@ type kevCatalog struct {
 	} `json:"vulnerabilities"`
 }
 
+// фильтр "не ниже" + выкидывание не-KEV. отдельная функция чтобы тестировать
+func filterAdvisories(all []Advisory, min string, kev map[string]bool) []Advisory {
+	var kept []Advisory
+	if min != "" {
+		want := sevRank[strings.ToLower(min)]
+		for _, a := range all {
+			if sevRank[strings.ToLower(a.Severity)] >= want {
+				kept = append(kept, a)
+			}
+		}
+	} else {
+		kept = all
+	}
+	if kev != nil {
+		var only []Advisory
+		for _, a := range kept {
+			if kev[a.CVEID] {
+				only = append(only, a)
+			}
+		}
+		kept = only
+	}
+	return kept
+}
+
 func getJSON(url string, out interface{}) error {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -127,25 +152,7 @@ func main() {
 	}
 
 	// фильтр "не ниже" - api отдаёт только точную severity
-	if *min != "" {
-		want := sevRank[strings.ToLower(*min)]
-		var kept []Advisory
-		for _, a := range advisories {
-			if sevRank[strings.ToLower(a.Severity)] >= want {
-				kept = append(kept, a)
-			}
-		}
-		advisories = kept
-	}
-	if kev != nil {
-		var kept []Advisory
-		for _, a := range advisories {
-			if kev[a.CVEID] {
-				kept = append(kept, a)
-			}
-		}
-		advisories = kept
-	}
+	advisories = filterAdvisories(advisories, *min, kev)
 	if len(advisories) > *limit {
 		advisories = advisories[:*limit]
 	}
